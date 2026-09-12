@@ -1,0 +1,304 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+-- ==========================================
+-- การตั้งค่าเริ่มต้น
+-- ==========================================
+local Settings = {
+	AimbotEnabled = false,
+	ESPEnabled = false,
+	TeamCheck = true,
+	TargetPart = "Head", 
+	FovSize = 150,
+	Smoothness = 0.2,
+	FovColor = Color3.fromRGB(255, 0, 0),
+	ESPColor = Color3.fromRGB(255, 0, 0)
+}
+
+-- ==========================================
+-- สร้าง GUI
+-- ==========================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AimAssistGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local ESPFolder = Instance.new("Folder")
+ESPFolder.Name = "ESP_Folder"
+ESPFolder.Parent = ScreenGui
+
+-- วงกลม FOV
+local FovCircle = Instance.new("Frame")
+FovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+FovCircle.Position = UDim2.new(0.5, 0, 0.5, 0)
+FovCircle.Size = UDim2.new(0, Settings.FovSize * 2, 0, Settings.FovSize * 2)
+FovCircle.BackgroundTransparency = 1
+FovCircle.Visible = false
+FovCircle.Parent = ScreenGui
+
+local FovCorner = Instance.new("UICorner")
+FovCorner.CornerRadius = UDim.new(1, 0)
+FovCorner.Parent = FovCircle
+
+local FovStroke = Instance.new("UIStroke")
+FovStroke.Color = Settings.FovColor
+FovStroke.Thickness = 2
+FovStroke.Parent = FovCircle
+
+-- หน้าต่างหลัก (Main Frame)
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 250, 0, 470) -- ปรับความสูงเป็น 470 เพื่อเว้นที่ให้ข้อความเครดิต
+MainFrame.Position = UDim2.new(0.1, 0, 0.2, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.Parent = MainFrame
+
+-- แถบหัวข้อ
+local Header = Instance.new("TextButton")
+Header.Size = UDim2.new(1, 0, 0, 40)
+Header.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+Header.Text = "  Aim Assist & ESP (ย่อ/ขยาย)"
+Header.TextColor3 = Color3.fromRGB(255, 255, 255)
+Header.Font = Enum.Font.GothamBold
+Header.TextSize = 14
+Header.TextXAlignment = Enum.TextXAlignment.Left
+Header.Parent = MainFrame
+
+local HeaderCorner = Instance.new("UICorner")
+HeaderCorner.Parent = Header
+
+-- ข้อความเครดิตผู้สร้าง (เพิ่มใหม่)
+local CreditLabel = Instance.new("TextLabel")
+CreditLabel.Size = UDim2.new(1, 0, 0, 25)
+CreditLabel.Position = UDim2.new(0, 0, 1, -25) -- ให้อยู่ติดขอบล่างสุด
+CreditLabel.BackgroundTransparency = 1
+CreditLabel.Text = "สร้างโดย Dev Tin Roblox"
+CreditLabel.TextColor3 = Color3.fromRGB(150, 255, 150) -- สีเขียวอ่อนพาสเทล
+CreditLabel.Font = Enum.Font.GothamBold
+CreditLabel.TextSize = 12
+CreditLabel.Parent = MainFrame
+
+-- คอนเทนต์ด้านใน
+local Content = Instance.new("Frame")
+Content.Size = UDim2.new(1, 0, 1, -65) -- หักพื้นที่ Header และ Credit ออก
+Content.Position = UDim2.new(0, 0, 0, 40)
+Content.BackgroundTransparency = 1
+Content.Parent = MainFrame
+
+local function createButton(text, posY, parent, defaultColor)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0.9, 0, 0, 35)
+	btn.Position = UDim2.new(0.05, 0, 0, posY)
+	btn.BackgroundColor3 = defaultColor or Color3.fromRGB(70, 70, 70)
+	btn.Text = text
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Font = Enum.Font.GothamSemibold
+	btn.TextSize = 14
+	btn.Parent = parent
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = btn
+	return btn
+end
+
+-- สร้างปุ่มต่างๆ
+local AimbotBtn = createButton("Aimbot: OFF", 10, Content)
+local TargetBtn = createButton("Target: HEAD", 55, Content, Color3.fromRGB(150, 50, 50))
+local ESPBtn = createButton("ESP: OFF", 100, Content)
+local TeamCheckBtn = createButton("Team Check: ON", 145, Content, Color3.fromRGB(0, 170, 0))
+local FovPlusBtn = createButton("FOV +", 190, Content)
+local FovMinusBtn = createButton("FOV -", 235, Content)
+local SmoothPlusBtn = createButton("Speed +", 280, Content)
+local SmoothMinusBtn = createButton("Speed -", 325, Content)
+local ColorBtn = createButton("Change Theme Color", 370, Content)
+
+-- ==========================================
+-- ระบบ ESP
+-- ==========================================
+local function applyESP(player, character)
+	if not character then return end
+	
+	local existing = ESPFolder:FindFirstChild(player.Name)
+	if existing then existing:Destroy() end
+	
+	if Settings.ESPEnabled then
+		if Settings.TeamCheck and player.Team ~= nil and player.Team == LocalPlayer.Team then
+			return
+		end
+		
+		local highlight = Instance.new("Highlight")
+		highlight.Name = player.Name
+		highlight.Adornee = character
+		highlight.FillColor = Settings.ESPColor
+		highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+		highlight.FillTransparency = 0.5
+		highlight.OutlineTransparency = 0.1
+		highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+		highlight.Parent = ESPFolder
+	end
+end
+
+local function updateAllESP()
+	ESPFolder:ClearAllChildren()
+	if Settings.ESPEnabled then
+		for _, player in ipairs(Players:GetPlayers()) do
+			if player ~= LocalPlayer and player.Character then
+				applyESP(player, player.Character)
+			end
+		end
+	end
+end
+
+local function setupPlayerAdded(player)
+	if player == LocalPlayer then return end
+	if player.Character then applyESP(player, player.Character) end
+	player.CharacterAdded:Connect(function(character)
+		character:WaitForChild("HumanoidRootPart", 5)
+		applyESP(player, character)
+	end)
+end
+
+Players.PlayerAdded:Connect(setupPlayerAdded)
+for _, player in ipairs(Players:GetPlayers()) do
+	setupPlayerAdded(player)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	local existing = ESPFolder:FindFirstChild(player.Name)
+	if existing then existing:Destroy() end
+end)
+
+-- ==========================================
+-- ระบบการทำงานของปุ่ม (UI Logic)
+-- ==========================================
+local minimized = false
+Header.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	Content.Visible = not minimized
+	CreditLabel.Visible = not minimized -- ซ่อนเครดิตเวลาพับหน้าต่าง
+	MainFrame.Size = minimized and UDim2.new(0, 250, 0, 40) or UDim2.new(0, 250, 0, 470)
+end)
+
+AimbotBtn.MouseButton1Click:Connect(function()
+	Settings.AimbotEnabled = not Settings.AimbotEnabled
+	AimbotBtn.Text = Settings.AimbotEnabled and "Aimbot: ON" or "Aimbot: OFF"
+	AimbotBtn.BackgroundColor3 = Settings.AimbotEnabled and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(70, 70, 70)
+	FovCircle.Visible = Settings.AimbotEnabled
+end)
+
+TargetBtn.MouseButton1Click:Connect(function()
+	if Settings.TargetPart == "Head" then
+		Settings.TargetPart = "HumanoidRootPart"
+		TargetBtn.Text = "Target: BODY"
+	else
+		Settings.TargetPart = "Head"
+		TargetBtn.Text = "Target: HEAD"
+	end
+end)
+
+ESPBtn.MouseButton1Click:Connect(function()
+	Settings.ESPEnabled = not Settings.ESPEnabled
+	ESPBtn.Text = Settings.ESPEnabled and "ESP: ON" or "ESP: OFF"
+	ESPBtn.BackgroundColor3 = Settings.ESPEnabled and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(70, 70, 70)
+	updateAllESP()
+end)
+
+TeamCheckBtn.MouseButton1Click:Connect(function()
+	Settings.TeamCheck = not Settings.TeamCheck
+	TeamCheckBtn.Text = Settings.TeamCheck and "Team Check: ON" or "Team Check: OFF"
+	TeamCheckBtn.BackgroundColor3 = Settings.TeamCheck and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(70, 70, 70)
+	updateAllESP()
+end)
+
+local function updateFovUI()
+	FovCircle.Size = UDim2.new(0, Settings.FovSize * 2, 0, Settings.FovSize * 2)
+end
+FovPlusBtn.MouseButton1Click:Connect(function() Settings.FovSize = Settings.FovSize + 10 updateFovUI() end)
+FovMinusBtn.MouseButton1Click:Connect(function() Settings.FovSize = math.max(10, Settings.FovSize - 10) updateFovUI() end)
+SmoothPlusBtn.MouseButton1Click:Connect(function() Settings.Smoothness = math.clamp(Settings.Smoothness + 0.1, 0.1, 1) SmoothPlusBtn.Text = "Speed: " .. tostring(math.floor(Settings.Smoothness * 10) / 10) end)
+SmoothMinusBtn.MouseButton1Click:Connect(function() Settings.Smoothness = math.clamp(Settings.Smoothness - 0.1, 0.1, 1) SmoothMinusBtn.Text = "Speed: " .. tostring(math.floor(Settings.Smoothness * 10) / 10) end)
+
+ColorBtn.MouseButton1Click:Connect(function()
+	local randomColor = Color3.new(math.random(), math.random(), math.random())
+	Settings.FovColor = randomColor
+	Settings.ESPColor = randomColor
+	FovStroke.Color = Settings.FovColor
+	updateAllESP()
+end)
+
+-- ==========================================
+-- ระบบลากหน้าต่าง (Drag GUI)
+-- ==========================================
+local dragging, dragInput, dragStart, startPos
+Header.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true dragStart = input.Position startPos = MainFrame.Position
+	end
+end)
+Header.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		dragInput = input
+	end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		local delta = input.Position - dragStart
+		MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = false
+	end
+end)
+
+-- ==========================================
+-- ระบบ Aimbot (เน้นเล็งหัวแบบแม่นยำ)
+-- ==========================================
+local function getNearestTarget()
+	local nearest = nil
+	local minDist = Settings.FovSize
+	local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			
+			if Settings.TeamCheck and player.Team ~= nil and player.Team == LocalPlayer.Team then
+				continue
+			end
+			
+			if player.Character and player.Character:FindFirstChild(Settings.TargetPart) and player.Character:FindFirstChild("Humanoid") then
+				if player.Character.Humanoid.Health > 0 then
+					local targetPart = player.Character[Settings.TargetPart]
+					local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+					
+					if onScreen then
+						local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+						if dist < minDist then
+							minDist = dist
+							nearest = targetPart
+						end
+					end
+				end
+			end
+		end
+	end
+	return nearest
+end
+
+RunService.RenderStepped:Connect(function()
+	if Settings.AimbotEnabled then
+		local target = getNearestTarget()
+		if target then
+			local targetCFrame = CFrame.lookAt(Camera.CFrame.Position, target.Position)
+			Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, Settings.Smoothness)
+		end
+	end
+end)
